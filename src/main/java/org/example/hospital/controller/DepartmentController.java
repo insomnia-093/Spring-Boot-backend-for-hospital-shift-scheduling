@@ -1,4 +1,4 @@
-package  main.java.org.example.hospital.controller;
+package org.example.hospital.controller;
 
 import jakarta.validation.Valid;
 import java.util.List;

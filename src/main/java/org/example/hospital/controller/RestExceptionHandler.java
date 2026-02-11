@@ -1,8 +1,10 @@
 package  org.example.hospital.controller;
 
 import java.time.OffsetDateTime;
+import jakarta.persistence.OptimisticLockException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -27,6 +29,11 @@ public class RestExceptionHandler {
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiError> handleGeneric(Exception ex) {
         return buildResponse(HttpStatus.INTERNAL_SERVER_ERROR, "Unexpected error");
+    }
+
+    @ExceptionHandler({OptimisticLockException.class, ObjectOptimisticLockingFailureException.class})
+    public ResponseEntity<ApiError> handleOptimisticLock(Exception ex) {
+        return buildResponse(HttpStatus.CONFLICT, "数据已被他人更新，请刷新后重试");
     }
 
     private ResponseEntity<ApiError> buildResponse(HttpStatus status, String message) {

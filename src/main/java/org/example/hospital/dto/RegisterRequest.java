@@ -1,7 +1,6 @@
 package org.example.hospital.dto;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.Size;
 import java.util.Set;
 import org.example.hospital.domain.RoleType;
@@ -21,7 +20,8 @@ public class RegisterRequest {
 
     private Long departmentId;
 
-    @NotEmpty
+    private String departmentName;
+
     private Set<RoleType> roles;
 
     public String getEmail() {
@@ -54,6 +54,14 @@ public class RegisterRequest {
 
     public void setDepartmentId(Long departmentId) {
         this.departmentId = departmentId;
+    }
+
+    public String getDepartmentName() {
+        return departmentName;
+    }
+
+    public void setDepartmentName(String departmentName) {
+        this.departmentName = departmentName;
     }
 
     public Set<RoleType> getRoles() {

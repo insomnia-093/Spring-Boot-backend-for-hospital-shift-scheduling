@@ -13,6 +13,8 @@ public interface ShiftRepository extends JpaRepository<Shift, Long> {
 
     List<Shift> findByDepartmentAndStartTimeBetween(Department department, LocalDateTime start, LocalDateTime end);
 
+    List<Shift> findByStartTimeBetween(LocalDateTime start, LocalDateTime end);
+
     List<Shift> findByAssignedUser(UserAccount userAccount);
 
     List<Shift> findByStatus(ShiftStatus status);

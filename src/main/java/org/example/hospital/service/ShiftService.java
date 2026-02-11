@@ -1,7 +1,10 @@
 package  org.example.hospital.service;
 
 import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 import org.example.hospital.domain.Department;
@@ -11,7 +14,10 @@ import org.example.hospital.domain.ShiftStatus;
 import org.example.hospital.domain.UserAccount;
 import org.example.hospital.dto.CreateShiftRequest;
 import org.example.hospital.dto.ShiftResponse;
+import org.example.hospital.dto.ShiftSummaryResponse;
 import org.example.hospital.dto.UpdateShiftAssignmentRequest;
+import org.example.hospital.dto.UpdateShiftRequest;
+import org.example.hospital.dto.SummaryItem;
 import org.example.hospital.repository.ShiftRepository;
 import org.example.hospital.repository.UserAccountRepository;
 import org.springframework.stereotype.Service;
@@ -23,13 +29,16 @@ public class ShiftService {
     private final ShiftRepository shiftRepository;
     private final DepartmentService departmentService;
     private final UserAccountRepository userAccountRepository;
+    private final RealtimePublisher realtimePublisher;
 
     public ShiftService(ShiftRepository shiftRepository,
                         DepartmentService departmentService,
-                        UserAccountRepository userAccountRepository) {
+                        UserAccountRepository userAccountRepository,
+                        RealtimePublisher realtimePublisher) {
         this.shiftRepository = shiftRepository;
         this.departmentService = departmentService;
         this.userAccountRepository = userAccountRepository;
+        this.realtimePublisher = realtimePublisher;
     }
 
     @Transactional
@@ -39,7 +48,9 @@ public class ShiftService {
         Shift shift = new Shift(request.getStartTime(), request.getEndTime(), request.getRequiredRole(), department);
         shift.setNotes(request.getNotes());
         Shift saved = shiftRepository.save(shift);
-        return toResponse(saved);
+        ShiftResponse response = toResponse(saved);
+        realtimePublisher.publishShiftEvent("SHIFT_CREATED", response);
+        return response;
     }
 
     @Transactional(readOnly = true)
@@ -84,7 +95,36 @@ public class ShiftService {
         }
         shift.setNotes(request.getNotes());
         shift.setStatus(request.getStatus());
-        return toResponse(shift);
+        ShiftResponse response = toResponse(shift);
+        realtimePublisher.publishShiftEvent("SHIFT_UPDATED", response);
+        return response;
+    }
+
+    @Transactional
+    public ShiftResponse updateShiftDetails(Long shiftId, UpdateShiftRequest request) {
+        validateShiftTimes(request.getStartTime(), request.getEndTime());
+        Shift shift = shiftRepository.findById(shiftId)
+                .orElseThrow(() -> new IllegalArgumentException("Shift not found"));
+        Department department = departmentService.requireById(request.getDepartmentId());
+        shift.setStartTime(request.getStartTime());
+        shift.setEndTime(request.getEndTime());
+        shift.setRequiredRole(request.getRequiredRole());
+        shift.setStatus(request.getStatus());
+        shift.setDepartment(department);
+        shift.setNotes(request.getNotes());
+
+        if (request.getAssigneeUserId() != null) {
+            UserAccount assignee = userAccountRepository.findById(request.getAssigneeUserId())
+                    .orElseThrow(() -> new IllegalArgumentException("User not found"));
+            ensureRoleMatches(assignee, request.getRequiredRole());
+            shift.setAssignedUser(assignee);
+        } else {
+            shift.setAssignedUser(null);
+        }
+
+        ShiftResponse response = toResponse(shift);
+        realtimePublisher.publishShiftEvent("SHIFT_UPDATED", response);
+        return response;
     }
 
     @Transactional
@@ -93,6 +133,77 @@ public class ShiftService {
             throw new IllegalArgumentException("Shift not found");
         }
         shiftRepository.deleteById(shiftId);
+        realtimePublisher.publishShiftEvent("SHIFT_DELETED", Map.of("shiftId", shiftId));
+    }
+
+    @Transactional(readOnly = true)
+    public ShiftSummaryResponse buildSummary(LocalDateTime start, LocalDateTime end) {
+        LocalDateTime effectiveStart = start != null ? start : LocalDateTime.now().minusDays(7);
+        LocalDateTime effectiveEnd = end != null ? end : LocalDateTime.now().plusDays(30);
+        List<Shift> rangeShifts = shiftRepository.findByStartTimeBetween(effectiveStart, effectiveEnd);
+
+        long totalShifts = rangeShifts.size();
+        long nightShifts = rangeShifts.stream().filter(shift -> isNightShift(shift.getStartTime(), shift.getEndTime())).count();
+        long assignedShifts = rangeShifts.stream().filter(shift -> shift.getAssignedUser() != null).count();
+        long unassignedShifts = totalShifts - assignedShifts;
+        long totalAssignees = rangeShifts.stream()
+                .map(Shift::getAssignedUser)
+                .filter(Objects::nonNull)
+                .map(UserAccount::getId)
+                .distinct()
+                .count();
+
+        List<SummaryItem> roleDistribution = rangeShifts.stream()
+                .collect(Collectors.groupingBy(Shift::getRequiredRole, Collectors.counting()))
+                .entrySet()
+                .stream()
+                .sorted(Map.Entry.comparingByKey(Comparator.comparing(Enum::name)))
+                .map(entry -> new SummaryItem(entry.getKey().name(), entry.getValue()))
+                .collect(Collectors.toList());
+
+        List<SummaryItem> departmentDistribution = rangeShifts.stream()
+                .filter(shift -> shift.getDepartment() != null)
+                .collect(Collectors.groupingBy(shift -> shift.getDepartment().getName(), Collectors.counting()))
+                .entrySet()
+                .stream()
+                .sorted(Map.Entry.<String, Long>comparingByValue().reversed())
+                .map(entry -> new SummaryItem(entry.getKey(), entry.getValue()))
+                .collect(Collectors.toList());
+
+        List<SummaryItem> assigneeDistribution = rangeShifts.stream()
+                .filter(shift -> shift.getAssignedUser() != null)
+                .collect(Collectors.groupingBy(shift -> shift.getAssignedUser().getFullName(), Collectors.counting()))
+                .entrySet()
+                .stream()
+                .sorted(Map.Entry.<String, Long>comparingByValue().reversed())
+                .limit(8)
+                .map(entry -> new SummaryItem(entry.getKey(), entry.getValue()))
+                .collect(Collectors.toList());
+
+        return new ShiftSummaryResponse(
+                totalShifts,
+                nightShifts,
+                assignedShifts,
+                unassignedShifts,
+                totalAssignees,
+                roleDistribution,
+                departmentDistribution,
+                assigneeDistribution
+        );
+    }
+
+    private boolean isNightShift(LocalDateTime start, LocalDateTime end) {
+        if (start == null) {
+            return false;
+        }
+        if (isNightTime(start.toLocalTime())) {
+            return true;
+        }
+        return end != null && isNightTime(end.toLocalTime());
+    }
+
+    private boolean isNightTime(LocalTime time) {
+        return time.isAfter(LocalTime.of(17, 59)) || time.isBefore(LocalTime.of(6, 0));
     }
 
     private void validateShiftTimes(LocalDateTime start, LocalDateTime end) {

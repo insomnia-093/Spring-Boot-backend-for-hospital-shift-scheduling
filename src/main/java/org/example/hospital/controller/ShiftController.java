@@ -1,10 +1,11 @@
-package  main.java.org.example.hospital.controller;
+package org.example.hospital.controller;
 
 import jakarta.validation.Valid;
 import java.time.LocalDateTime;
 import java.util.List;
 import org.example.hospital.dto.CreateShiftRequest;
 import org.example.hospital.dto.ShiftResponse;
+import org.example.hospital.dto.ShiftSummaryResponse;
 import org.example.hospital.dto.UpdateShiftAssignmentRequest;
 import org.example.hospital.service.ShiftService;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -78,5 +79,13 @@ public class ShiftController {
     public ResponseEntity<Void> deleteShift(@PathVariable Long shiftId) {
         shiftService.deleteShift(shiftId);
         return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/summary")
+    // 为日历和仪表板分析提供班次摘要信息。
+    public ResponseEntity<ShiftSummaryResponse> summary(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime start,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime end) {
+        return ResponseEntity.ok(shiftService.buildSummary(start, end));
     }
 }

@@ -21,6 +21,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.Assert;
+import org.springframework.util.StringUtils;
 
 @Service
 public class AuthService {
@@ -57,8 +58,22 @@ public class AuthService {
             Department department = departmentRepository.findById(request.getDepartmentId())
                     .orElseThrow(() -> new IllegalArgumentException("Department not found"));
             user.setDepartment(department);
+        } else if (StringUtils.hasText(request.getDepartmentName())) {
+            String name = request.getDepartmentName().trim();
+            Department department = departmentRepository.findByName(name)
+                    .orElseGet(() -> departmentRepository.save(new Department(name, null)));
+            user.setDepartment(department);
         }
-        Set<Role> roles = request.getRoles().stream()
+
+        Set<RoleType> requestedRoles = request.getRoles() != null ? request.getRoles() : Set.of();
+        Set<RoleType> allowedRoles = requestedRoles.stream()
+                .filter(roleType -> roleType == RoleType.DOCTOR || roleType == RoleType.NURSE)
+                .collect(Collectors.toSet());
+        if (allowedRoles.isEmpty()) {
+            allowedRoles = Set.of(RoleType.NURSE);
+        }
+
+        Set<Role> roles = allowedRoles.stream()
                 .map(this::resolveRole)
                 .collect(Collectors.toSet());
         user.setRoles(roles);

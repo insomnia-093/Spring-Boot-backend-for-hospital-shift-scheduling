@@ -27,7 +27,7 @@ public class UserAccountDetails implements UserDetails {
                 .map(Role::getName)
                 .filter(Objects::nonNull)
                 .map(roleType -> new SimpleGrantedAuthority("ROLE_" + roleType.name()))
-                .collect(Collectors.toUnmodifiableSet());
+                .collect(Collectors.toSet());
     }
 
     public Long getId() {

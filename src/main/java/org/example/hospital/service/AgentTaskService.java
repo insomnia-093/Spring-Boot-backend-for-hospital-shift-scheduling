@@ -15,16 +15,20 @@ import org.springframework.transaction.annotation.Transactional;
 public class AgentTaskService {
 
     private final AgentTaskRepository agentTaskRepository;
+    private final RealtimePublisher realtimePublisher;
 
-    public AgentTaskService(AgentTaskRepository agentTaskRepository) {
+    public AgentTaskService(AgentTaskRepository agentTaskRepository, RealtimePublisher realtimePublisher) {
         this.agentTaskRepository = agentTaskRepository;
+        this.realtimePublisher = realtimePublisher;
     }
 
     @Transactional
     public AgentTaskResponse createTask(AgentTaskRequest request) {
         AgentTask task = new AgentTask(request.getTaskType(), request.getPayload());
         AgentTask saved = agentTaskRepository.save(task);
-        return toResponse(saved);
+        AgentTaskResponse response = toResponse(saved);
+        realtimePublisher.publishAgentTaskEvent("TASK_CREATED", response);
+        return response;
     }
 
     @Transactional(readOnly = true)
@@ -41,7 +45,9 @@ public class AgentTaskService {
         task.setStatus(request.getStatus());
         task.setResult(request.getResult());
         task.markUpdated();
-        return toResponse(task);
+        AgentTaskResponse response = toResponse(task);
+        realtimePublisher.publishAgentTaskEvent("TASK_UPDATED", response);
+        return response;
     }
 
     @Transactional(readOnly = true)

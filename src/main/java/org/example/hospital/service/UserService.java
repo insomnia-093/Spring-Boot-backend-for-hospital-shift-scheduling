@@ -7,6 +7,7 @@ import org.example.hospital.domain.Role;
 import org.example.hospital.domain.RoleType;
 import org.example.hospital.domain.UserAccount;
 import org.example.hospital.repository.UserAccountRepository;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -14,9 +15,11 @@ import org.springframework.transaction.annotation.Transactional;
 public class UserService {
 
     private final UserAccountRepository userAccountRepository;
+    private final PasswordEncoder passwordEncoder;
 
-    public UserService(UserAccountRepository userAccountRepository) {
+    public UserService(UserAccountRepository userAccountRepository, PasswordEncoder passwordEncoder) {
         this.userAccountRepository = userAccountRepository;
+        this.passwordEncoder = passwordEncoder;
     }
 
     @Transactional(readOnly = true)
@@ -38,6 +41,13 @@ public class UserService {
         Long departmentId = user.getDepartment() != null ? user.getDepartment().getId() : null;
         String departmentName = user.getDepartment() != null ? user.getDepartment().getName() : null;
         return new UserSummary(user.getId(), user.getEmail(), user.getFullName(), roles, departmentId, departmentName);
+    }
+
+    @Transactional
+    public void changePassword(Long userId, String rawPassword) {
+        UserAccount user = userAccountRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+        user.setPassword(passwordEncoder.encode(rawPassword));
     }
 
     public static class UserSummary {
