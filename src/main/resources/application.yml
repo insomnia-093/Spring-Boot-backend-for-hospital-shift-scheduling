@@ -34,6 +34,15 @@ app:
       password: ${INIT_ADMIN_PASSWORD:Admin123!}
       full-name: ${INIT_ADMIN_FULL_NAME:System Admin}
 
+# Coze AI 智能体配置
+coze:
+  api:
+    url: ${COZE_API_URL:https://api.coze.cn}
+    key: ${COZE_API_KEY:pat_RZa5ZZ2GwpeGdcNlUtioauzioDQRTG0sM62Ex04wmHpbJ27vfGvCclwko2vEhsMf}
+  workflow:
+    id: ${COZE_WORKFLOW_ID:7600260725215346729}
+  enabled: ${COZE_ENABLED:true}
+
 logging:
   level:
     root: INFO
@@ -54,11 +63,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,metrics,prometheus
-  metrics:
-    export:
-      prometheus:
-        enabled: true
+        include: health,info,metrics,prometheus
   endpoint:
     health:
       show-details: always

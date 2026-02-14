@@ -54,10 +54,10 @@ if /I "%MODE%"=="frontend" echo [INFO] Frontend: http://localhost:5173
 if /I "%MODE%"=="both" echo [INFO] Backend: http://localhost:9090
 if /I "%MODE%"=="both" echo [INFO] Frontend: http://localhost:5173
 
-if /I "%MODE%"=="backend" start "backend" cmd /k ""%BACKEND_BAT%""
-if /I "%MODE%"=="frontend" start "frontend" cmd /k ""%FRONTEND_BAT%""
-if /I "%MODE%"=="both" start "backend" cmd /k ""%BACKEND_BAT%""
-if /I "%MODE%"=="both" start "frontend" cmd /k ""%FRONTEND_BAT%""
+if /I "%MODE%"=="backend" start "backend" cmd /k ""call "%BACKEND_BAT%"""
+if /I "%MODE%"=="frontend" start "frontend" cmd /k ""call "%FRONTEND_BAT%"""
+if /I "%MODE%"=="both" start "backend" cmd /k ""call "%BACKEND_BAT%"""
+if /I "%MODE%"=="both" start "frontend" cmd /k ""call "%FRONTEND_BAT%"""
 
 exit /b 0
 

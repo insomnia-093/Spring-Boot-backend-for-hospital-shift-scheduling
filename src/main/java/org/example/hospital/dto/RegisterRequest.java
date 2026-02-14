@@ -20,8 +20,6 @@ public class RegisterRequest {
 
     private Long departmentId;
 
-    private String departmentName;
-
     private Set<RoleType> roles;
 
     public String getEmail() {
@@ -54,14 +52,6 @@ public class RegisterRequest {
 
     public void setDepartmentId(Long departmentId) {
         this.departmentId = departmentId;
-    }
-
-    public String getDepartmentName() {
-        return departmentName;
-    }
-
-    public void setDepartmentName(String departmentName) {
-        this.departmentName = departmentName;
     }
 
     public Set<RoleType> getRoles() {

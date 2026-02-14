@@ -21,16 +21,10 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.Assert;
-import org.springframework.util.StringUtils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 @Service
 public class AuthService {
 
-    private static final Logger logger = LoggerFactory.getLogger(AuthService.class);
-
-    // ...existing code...
     private final UserAccountRepository userAccountRepository;
     private final RoleRepository roleRepository;
     private final DepartmentRepository departmentRepository;
@@ -54,24 +48,14 @@ public class AuthService {
 
     @Transactional
     public JwtResponse register(RegisterRequest request) {
-        logger.info("开始注册新用户: {}", request.getEmail());
         Assert.notNull(request, "Register request must not be null");
         if (userAccountRepository.existsByEmail(request.getEmail())) {
-            logger.warn("邮箱已注册: {}", request.getEmail());
             throw new IllegalArgumentException("Email already registered");
         }
         UserAccount user = new UserAccount(request.getEmail(), passwordEncoder.encode(request.getPassword()), request.getFullName());
         if (request.getDepartmentId() != null) {
             Department department = departmentRepository.findById(request.getDepartmentId())
-                    .orElseThrow(() -> {
-                        logger.error("科室不存在: {}", request.getDepartmentId());
-                        return new IllegalArgumentException("Department not found");
-                    });
-            user.setDepartment(department);
-        } else if (StringUtils.hasText(request.getDepartmentName())) {
-            String name = request.getDepartmentName().trim();
-            Department department = departmentRepository.findByName(name)
-                    .orElseGet(() -> departmentRepository.save(new Department(name, null)));
+                    .orElseThrow(() -> new IllegalArgumentException("Department not found"));
             user.setDepartment(department);
         }
 
@@ -88,54 +72,23 @@ public class AuthService {
                 .collect(Collectors.toSet());
         user.setRoles(roles);
         UserAccount savedUser = userAccountRepository.save(user);
-        logger.info("用户注册成功: {}, ID: {}, 角色: {}", request.getEmail(), savedUser.getId(), allowedRoles);
-
-        try {
-            Authentication authentication = authenticationManager.authenticate(
-                    new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword())
-            );
-            String token = jwtTokenProvider.generateToken(authentication);
-            logger.info("注册成功并生成令牌: {}", request.getEmail());
-            return buildJwtResponse(savedUser, token);
-        } catch (Exception e) {
-            logger.error("注册后认证失败: {}", request.getEmail(), e);
-            throw e;
-        }
+        Authentication authentication = authenticationManager.authenticate(
+                new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword())
+        );
+        String token = jwtTokenProvider.generateToken(authentication);
+        return buildJwtResponse(savedUser, token);
     }
 
     public JwtResponse login(LoginRequest request) {
-        logger.info("用户尝试登录: {}", request.getEmail());
         Assert.notNull(request, "Login request must not be null");
-
-        // 检查用户是否存在
-        boolean userExists = userAccountRepository.existsByEmail(request.getEmail());
-        logger.debug("用户存在检查: {} = {}", request.getEmail(), userExists);
-
-        if (!userExists) {
-            logger.warn("登录失败 - 用户不存在: {}", request.getEmail());
-            throw new IllegalArgumentException("User not found");
-        }
-
-        try {
-            Authentication authentication = authenticationManager.authenticate(
-                    new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword())
-            );
-            logger.debug("身份验证成功: {}", request.getEmail());
-
-            String token = jwtTokenProvider.generateToken(authentication);
-            UserAccountDetails principal = (UserAccountDetails) authentication.getPrincipal();
-            UserAccount user = userAccountRepository.findById(principal.getId())
-                    .orElseThrow(() -> {
-                        logger.error("登录失败 - 认证后用户不存在: {}, ID: {}", request.getEmail(), principal.getId());
-                        return new IllegalStateException("User not found after authentication");
-                    });
-
-            logger.info("登录成功: {}, 角色: {}", request.getEmail(), user.getRoles());
-            return buildJwtResponse(user, token);
-        } catch (Exception e) {
-            logger.error("登录失败: {} - {}", request.getEmail(), e.getMessage(), e);
-            throw e;
-        }
+        Authentication authentication = authenticationManager.authenticate(
+                new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword())
+        );
+        String token = jwtTokenProvider.generateToken(authentication);
+        UserAccountDetails principal = (UserAccountDetails) authentication.getPrincipal();
+        UserAccount user = userAccountRepository.findById(principal.getId())
+                .orElseThrow(() -> new IllegalStateException("User not found after authentication"));
+        return buildJwtResponse(user, token);
     }
 
     private Role resolveRole(RoleType roleType) {

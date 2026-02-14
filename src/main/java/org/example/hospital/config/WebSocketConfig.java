@@ -24,6 +24,19 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
                 .map(String::trim)
                 .filter(StringUtils::hasText)
                 .collect(Collectors.toList());
+
+        // 如果没有配置，使用默认的本地开发地址
+        if (origins.isEmpty()) {
+            origins = Arrays.asList(
+                "http://localhost:5173",
+                "http://127.0.0.1:5173",
+                "http://localhost:5174",
+                "http://127.0.0.1:5174",
+                "http://localhost:4173",
+                "http://127.0.0.1:4173"
+            );
+        }
+
         registry.addEndpoint("/ws")
                 .setAllowedOriginPatterns(origins.toArray(new String[0]))
                 .withSockJS();

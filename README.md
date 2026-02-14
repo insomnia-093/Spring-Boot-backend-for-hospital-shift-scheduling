@@ -59,10 +59,6 @@ deploy.bat              # Windows
 
 ### 方式二：本地开发环境
 
-1.直接运行start-dev
-
-2.命令行
-
 ```bash
 # 启动后端
 mvn spring-boot:run
@@ -232,6 +228,18 @@ tail -f logs/hospital.log
 详见：
 - `IMPROVEMENT_SUMMARY.md` - 改进总结
 - `DOCKER_COMPLETE_GUIDE.md` - Docker 指南
+
+---
+
+## 📚 文档导航
+
+| 文档 | 说明 |
+|------|------|
+| `QUICK_START_GUIDE.md` | 快速开始 |
+| `DOCKER_QUICK_REFERENCE.md` | Docker 命令速查 |
+| `DOCKER_DEPLOYMENT.md` | Docker 完整指南 |
+| `DOCKER_COMPLETE_GUIDE.md` | Docker 终极指南 |
+| `IMPROVEMENT_SUMMARY.md` | 代码改进总结 |
 
 ---
 
