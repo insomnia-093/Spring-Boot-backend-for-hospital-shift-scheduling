@@ -14,6 +14,7 @@ echo [INFO] Backend: http://localhost:9090
 
 echo [INFO] If Maven fails, ensure JAVA_HOME and Maven are configured.
 cd /d "%ROOT%"
+set MAVEN_OPTS=-Dfile.encoding=UTF-8
 mvn -q -DskipTests spring-boot:run
 
 exit /b 0
