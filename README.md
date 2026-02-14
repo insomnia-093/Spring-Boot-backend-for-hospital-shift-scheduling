@@ -21,14 +21,14 @@
 
 ### ✨ 核心特性
 
-- ✅ **完整的账号管理** - 支持登录、注册、JWT 无状态认证
-- ✅ **灵活的权限控制** - 5 级角色系统（ADMIN/COORDINATOR/DOCTOR/NURSE/AGENT）
-- ✅ **智能排班系统** - 班次创建、员工指派、状态跟踪、冲突检测
-- ✅ **实时通信** - 基于 WebSocket 的多频道消息系统
-- ✅ **智能体协作** - 任务创建、状态跟踪、聊天历史持久化
-- ✅ **管理后台** - 用户密码重置、班次详情修改、数据统计
-- ✅ **生产就绪** - 完整的异常处理、日志记录、监控告警
-- ✅ **Docker 部署** - 一键启动、多服务容器编排、云部署支持
+- **账号管理**：支持登录、注册、JWT 无状态认证
+- **权限控制**：5 级角色系统（ADMIN/COORDINATOR/DOCTOR/NURSE/AGENT）
+- **智能排班**：班次创建、员工指派、状态跟踪、冲突检测
+- **实时通信**：基于 WebSocket 的多频道消息系统
+- **智能体协作**：任务创建、状态跟踪、聊天历史持久化
+- **管理后台**：用户密码重置、班次详情修改、数据统计
+- **生产就绪**：异常处理、日志记录、监控告警
+- **Docker 部署**：一键启动、多服务容器编排、云部署支持
 
 ---
 
@@ -43,7 +43,7 @@
 | **Node.js** | 18+ | 前端构建 |
 | **npm** | 8+ | 包管理器 |
 
-### 方式一：Docker 快速启动（推荐 ⭐）
+### 方式一：Docker 快速启动（推荐）
 
 ```bash
 cd D:\hospital\hospital
@@ -99,12 +99,10 @@ npm run dev
 
 ## 🛠 技术栈
 
-```
-后端: Spring Boot 3.2.1 + PostgreSQL 14+
-前端: Vue 3 + Vite + Fetch + WebSocket
-容器: Docker + Docker Compose
-监控: Prometheus + Grafana（可选）
-```
+- **后端**：Spring Boot 3.2.1 + PostgreSQL 14+
+- **前端**：Vue 3 + Vite + Fetch + WebSocket
+- **容器**：Docker + Docker Compose
+- **监控**：Prometheus + Grafana（可选）
 
 ---
 
@@ -183,11 +181,11 @@ docker-compose logs -f backend
 
 ## 🔐 安全建议
 
-✅ JWT 无状态认证
-✅ Spring Security 权限控制
-✅ BCrypt 密码加密
-✅ CORS 配置
-✅ SQL 注入防护
+- JWT 无状态认证
+- Spring Security 权限控制
+- BCrypt 密码加密
+- CORS 配置
+- SQL 注入防护
 
 生产环境步骤：
 ```bash
@@ -219,10 +217,7 @@ tail -f logs/hospital.log
 
 ## 📈 项目改进
 
-✨ **11 项核心改进**
 - 全局异常处理、结构化日志、数据库优化、监控告警等
-
-📚 **完整 Docker 支持**
 - 一键启动、生产配置、云部署
 
 详见：
