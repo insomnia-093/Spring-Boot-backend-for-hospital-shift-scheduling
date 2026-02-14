@@ -22,10 +22,13 @@ import org.example.hospital.repository.ShiftRepository;
 import org.example.hospital.repository.UserAccountRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @Service
 public class ShiftService {
 
+    private static final Logger logger = LoggerFactory.getLogger(ShiftService.class);
     private final ShiftRepository shiftRepository;
     private final DepartmentService departmentService;
     private final UserAccountRepository userAccountRepository;
@@ -43,11 +46,14 @@ public class ShiftService {
 
     @Transactional
     public ShiftResponse createShift(CreateShiftRequest request) {
+        logger.info("创建班次: 科室={}, 开始={}, 结束={}",
+            request.getDepartmentId(), request.getStartTime(), request.getEndTime());
         validateShiftTimes(request.getStartTime(), request.getEndTime());
         Department department = departmentService.requireById(request.getDepartmentId());
         Shift shift = new Shift(request.getStartTime(), request.getEndTime(), request.getRequiredRole(), department);
         shift.setNotes(request.getNotes());
         Shift saved = shiftRepository.save(shift);
+        logger.info("班次创建成功: ID={}", saved.getId());
         ShiftResponse response = toResponse(saved);
         realtimePublisher.publishShiftEvent("SHIFT_CREATED", response);
         return response;
@@ -55,23 +61,30 @@ public class ShiftService {
 
     @Transactional(readOnly = true)
     public List<ShiftResponse> findAll() {
+        logger.debug("查询所有班次");
         return shiftRepository.findAll().stream().map(this::toResponse).collect(Collectors.toList());
     }
 
     @Transactional(readOnly = true)
     public ShiftResponse findById(Long id) {
+        logger.debug("查询班次: {}", id);
         Shift shift = shiftRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Shift not found"));
+                .orElseThrow(() -> {
+                    logger.warn("班次不存在: {}", id);
+                    return new IllegalArgumentException("Shift not found");
+                });
         return toResponse(shift);
     }
 
     @Transactional(readOnly = true)
     public List<ShiftResponse> findOpenShifts() {
+        logger.debug("查询开放班次");
         return shiftRepository.findByStatus(ShiftStatus.OPEN).stream().map(this::toResponse).collect(Collectors.toList());
     }
 
     @Transactional(readOnly = true)
     public List<ShiftResponse> findByDepartmentAndRange(Long departmentId, LocalDateTime start, LocalDateTime end) {
+        logger.debug("查询科室班次范围: 科室={}, 开始={}, 结束={}", departmentId, start, end);
         Department department = departmentService.requireById(departmentId);
         LocalDateTime effectiveStart = start != null ? start : LocalDateTime.now().minusDays(7);
         LocalDateTime effectiveEnd = end != null ? end : LocalDateTime.now().plusDays(30);

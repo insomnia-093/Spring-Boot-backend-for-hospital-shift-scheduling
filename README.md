@@ -1,148 +1,271 @@
-# Hospital Scheduling Agent
+# 🏥 医院排班系统（Hospital Scheduling Agent）
 
-## 项目概览
-医院排班系统后端（Spring Boot 3 + PostgreSQL）与独立 Vue 3 前端。支持登录注册、权限控制、排班管理、智能体任务，并提供 WebSocket 实时通知与聊天记录。
+<div align="center">
 
-## 功能清单
-- 账号体系: 登录、注册、JWT 鉴权
-- 权限控制: 角色分级（ADMIN/COORDINATOR/DOCTOR/NURSE/AGENT）
-- 排班管理: 班次创建、指派、查询、删除
-- 智能体任务: 任务创建与状态跟踪
-- 实时通信: WebSocket 通知与智能体聊天
-- 聊天留存: 智能体沟通记录持久化
-- 管理后台: 用户密码重置、班次详情修改
+**一个基于 Spring Boot + Vue 3 的智能医院排班管理系统**
 
-## 技术栈
-| 层级 | 技术 | 备注 |
-| --- | --- | --- |
-| 语言/运行时 | Java 17, JavaScript (ES2020+), Node.js 18+ | 后端/前端运行环境 |
-| 后端框架 | Spring Boot 3.2.1, Spring Web | REST API |
-| 安全 | Spring Security, JWT | 无状态鉴权 |
-| 数据访问 | Spring Data JPA, Hibernate | ORM 持久化 |
-| 实时通信 | Spring WebSocket, STOMP, SockJS | WebSocket 与消息订阅 |
-| 数据库 | PostgreSQL 14+ | 关系型数据库 |
-| 前端框架 | Vue 3, Vite | SPA + 构建 |
-| 构建工具 | Maven, npm | 后端/前端构建 |
-| 序列化 | Jackson | JSON 序列化 |
+![Java 17](https://img.shields.io/badge/Java-17+-green?style=flat)
+![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.2.1-green?style=flat)
+![Vue 3](https://img.shields.io/badge/Vue-3-brightgreen?style=flat)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-14+-blue?style=flat)
 
-## 语言规范
-- 说明文档与 UI 文案使用中文，技术名词保留英文原文。
-- API 命名使用小写字母与短横线（kebab-case），如 `/api/agent/chat`。
-- Java 类与方法命名遵循驼峰（PascalCase / camelCase）。
-- 数据库表与字段使用小写下划线（snake_case）。
+[快速开始](#快速开始) • [功能特性](#功能特性) • [技术栈](#技术栈) • [Docker 部署](#docker-部署)
 
-## 运行前准备
-1. 安装 JDK 17+（确认 `java -version` 为 17 或更高）。
-2. 安装 PostgreSQL 并启动服务。
-3. 创建数据库（默认名 `my_pg_db`）。
-4. 确认后端配置文件 `src/main/resources/application.yml` 中数据库账号密码。
+</div>
 
-## 配置说明
-后端默认配置（可用环境变量覆盖）：
-- `DB_HOST` 默认 `localhost`
-- `DB_PORT` 默认 `5432`
-- `DB_NAME` 默认 `my_pg_db`
-- `DB_USER` 默认 `postgres`
-- `DB_PASSWORD` 默认 `123456`
-- `JWT_SECRET` 默认 `change-me-to-a-256-bit-secret-string`
-- `JWT_EXPIRATION_MINUTES` 默认 `60`
-- `server.port` 默认 `9090`
+---
 
-初始化管理员账号（启动时自动创建）：
-- `INIT_ADMIN_ENABLED` 默认 `true`
-- `INIT_ADMIN_EMAIL` 默认 `admin@hospital.local`
-- `INIT_ADMIN_PASSWORD` 默认 `Admin123!`
-- `INIT_ADMIN_FULL_NAME` 默认 `System Admin`
+## 📋 项目简介
 
-前端可用环境变量配置：
-- `VITE_API_BASE` 默认 `http://localhost:9090/api`
-- `VITE_WS_BASE` 默认 `http://localhost:9090/ws`
+**医院排班系统** 是一个为医院管理部门设计的智能排班管理平台，支持班次管理、员工调度、实时沟通和智能体协作。系统采用前后端分离架构，提供完整的权限控制、数据持久化和实时通信能力。
 
-## 本地运行
-### 启动后端
-```powershell
-mvn spring-boot:run
+### ✨ 核心特性
+
+- ✅ **完整的账号管理** - 支持登录、注册、JWT 无状态认证
+- ✅ **灵活的权限控制** - 5 级角色系统（ADMIN/COORDINATOR/DOCTOR/NURSE/AGENT）
+- ✅ **智能排班系统** - 班次创建、员工指派、状态跟踪、冲突检测
+- ✅ **实时通信** - 基于 WebSocket 的多频道消息系统
+- ✅ **智能体协作** - 任务创建、状态跟踪、聊天历史持久化
+- ✅ **管理后台** - 用户密码重置、班次详情修改、数据统计
+- ✅ **生产就绪** - 完整的异常处理、日志记录、监控告警
+- ✅ **Docker 部署** - 一键启动、多服务容器编排、云部署支持
+
+---
+
+## 🚀 快速开始
+
+### 前置条件
+
+| 要求 | 版本 | 说明 |
+|------|------|------|
+| **JDK** | 17+ | 后端运行时 |
+| **PostgreSQL** | 14+ | 数据库 |
+| **Node.js** | 18+ | 前端构建 |
+| **npm** | 8+ | 包管理器 |
+
+### 方式一：Docker 快速启动（推荐 ⭐）
+
+```bash
+cd D:\hospital\hospital
+deploy.bat              # Windows
+# 或
+./deploy.sh            # Linux/Mac
 ```
-后端默认地址: `http://localhost:9090`
 
-### 启动前端
-```powershell
+启动完成后访问：
+- **前端**：http://localhost
+- **后端 API**：http://localhost:9090/api
+- **健康检查**：http://localhost:9090/api/health
+
+### 方式二：本地开发环境
+
+1.直接运行start-dev
+
+2.命令行
+
+```bash
+# 启动后端
+mvn spring-boot:run
+# 访问 http://localhost:9090
+
+# 启动前端（新窗口）
 cd frontend
 npm install
 npm run dev
-```
-前端默认地址: `http://localhost:5173`
-
-如需调整前端连接后端地址：
-```powershell
-$env:VITE_API_BASE="http://localhost:9090/api"
-$env:VITE_WS_BASE="http://localhost:9090/ws"
+# 访问 http://localhost:5173
 ```
 
-## 管理员功能
-- 默认管理员可使用 `INIT_ADMIN_EMAIL` / `INIT_ADMIN_PASSWORD` 登录。
-- 管理员界面位置：登录后进入“个人中心”。
-- 功能包含：
-  - 重置指定用户密码
-  - 修改班次详情（时间、角色、科室、指派、状态、备注）
+---
 
-## WebSocket 实时功能
-- 连接地址: `http://localhost:9090/ws`
-- 订阅频道:
-  - `/topic/agent-chat` 智能体聊天室
-  - `/topic/shifts` 排班更新事件
-  - `/topic/agent-tasks` 任务更新事件
-  - `/topic/notifications` 通用通知
-- 发送地址:
-  - `/app/agent-chat` 发送聊天消息
+## 📚 功能说明
 
-## API 概览
-- Auth: `/api/auth/login`, `/api/auth/register`
-- Dept: `/api/departments`
-- Shift: `/api/shifts`
-- Agent: `/api/agent/tasks`
-- Admin: `/api/admin/users`, `/api/admin/users/{userId}/password`, `/api/admin/shifts/{shiftId}`
-- Chat: `/api/agent/chat?limit=50`
+### 账号与权限
+- 邮箱注册、JWT 登录
+- 5 级权限控制
+- 管理员密码重置
 
-## 常见问题
-- 端口冲突: 修改 `src/main/resources/application.yml` 的 `server.port`。
-- 数据库连接失败: 检查 `application.yml` 中数据库连接信息。
-- 编译报错: 若提示版本不兼容，请确认 IDE 的 Java 版本为 17。
+### 排班管理
+- 班次创建、指派、删除
+- 状态管理（OPEN → ASSIGNED → COMPLETED）
+- 冲突检测、数据统计
 
-## 生产环境部署
-### 后端部署
-1. 打包后端:
-```powershell
-mvn -DskipTests package
+### 实时通信
+- WebSocket 多频道：`/topic/shifts`、`/topic/agent-chat` 等
+- 聊天历史持久化
+- 实时任务推送
+
+### 智能体协作
+- 任务创建与跟踪
+- 实时聊天
+- 多端同步
+
+---
+
+## 🛠 技术栈
+
 ```
-2. 启动（建议使用环境变量配置数据库与密钥）:
-```powershell
-$env:DB_HOST="<db-host>"
-$env:DB_PORT="5432"
-$env:DB_NAME="hospital"
-$env:DB_USER="<db-user>"
-$env:DB_PASSWORD="<db-password>"
-$env:JWT_SECRET="<256-bit-secret>"
-$env:JWT_EXPIRATION_MINUTES="120"
-$env:SERVER_PORT="9090"
-$env:INIT_ADMIN_EMAIL="admin@hospital.local"
-$env:INIT_ADMIN_PASSWORD="<change-me>"
-java -jar target\hospital-0.0.1-SNAPSHOT.jar
+后端: Spring Boot 3.2.1 + PostgreSQL 14+
+前端: Vue 3 + Vite + Fetch + WebSocket
+容器: Docker + Docker Compose
+监控: Prometheus + Grafana（可选）
 ```
 
-### 前端部署
-1. 打包前端:
-```powershell
-cd frontend
-npm install
-npm run build
+---
+
+## ⚙️ 配置
+
+### 环境变量 (.env)
+
+```bash
+# 数据库
+DB_HOST=postgres
+DB_PASSWORD=postgres               # ⚠️ 生产必改
+
+# 认证
+JWT_SECRET=change-me-...           # ⚠️ 生产必改
+JWT_EXPIRATION_MINUTES=60
+
+# 初始管理员
+INIT_ADMIN_EMAIL=admin@hospital.local
+INIT_ADMIN_PASSWORD=Admin123!      # ⚠️ 生产必改
+
+# CORS
+CORS_ALLOWED_ORIGINS=http://localhost:5173,http://localhost:80
+WS_ALLOWED_ORIGINS=http://localhost:5173,http://localhost:80
+
+# 端口
+BACKEND_PORT=9090
+FRONTEND_PORT=80
 ```
-2. 将 `frontend/dist` 部署到静态服务器（如 Nginx 或 IIS）。
 
-### 反向代理（可选）
-如需统一域名，可将 `/api` 与 `/ws` 代理到后端端口，并将根路径指向前端静态资源。
+### 默认账号
 
-### 生产建议
-- 请修改默认数据库账号密码与 `JWT_SECRET`。
-- 建议在生产环境关闭 `ddl-auto: update`，改用迁移工具管理表结构。
-- 确保防火墙放行 `server.port` 端口（默认 9090）。
+| 用户 | 邮箱 | 密码 |
+|------|------|------|
+| 管理员 | admin@hospital.local | Admin123! |
+| 数据库 | postgres | postgres |
+
+⚠️ **生产环境务必修改所有密码！**
+
+---
+
+## 🐳 Docker 部署
+
+```bash
+# 快速启动
+deploy.bat              # Windows
+./deploy.sh            # Linux/Mac
+docker-compose up -d   # 手动
+
+# 查看日志
+docker-compose logs -f backend
+
+# 常用服务地址
+前端:     http://localhost
+后端:     http://localhost:9090
+健康检查: http://localhost:9090/api/health
+监控:     http://localhost:9090/actuator/prometheus
+```
+
+详见 `DOCKER_COMPLETE_GUIDE.md`
+
+---
+
+## 📡 API 概览
+
+```
+认证:    POST /api/auth/login, /api/auth/register
+排班:    GET|POST|PUT|DELETE /api/shifts
+科室:    GET|POST /api/departments
+智能体:  GET|POST /api/agent/tasks, GET /api/agent/chat
+管理:    GET /api/admin/users, PUT /api/admin/users/{userId}/password
+```
+
+完整文档：启动后访问 `http://localhost:9090/swagger-ui.html`
+
+---
+
+## 🔐 安全建议
+
+✅ JWT 无状态认证
+✅ Spring Security 权限控制
+✅ BCrypt 密码加密
+✅ CORS 配置
+✅ SQL 注入防护
+
+生产环境步骤：
+```bash
+# 1. 修改所有密码（.env）
+# 2. 生成 JWT 密钥：openssl rand -base64 32
+# 3. 启用 HTTPS（在 Nginx 配置 SSL）
+# 4. 定期备份数据库
+```
+
+---
+
+## 🔧 故障排查
+
+| 问题 | 解决方案 |
+|------|---------|
+| 端口被占用 | 修改 `.env` 中的端口号 |
+| 数据库连接失败 | 检查 PostgreSQL 运行状态和连接参数 |
+| 前端无法访问 API | 检查 CORS 配置，确保后端在 9090 运行 |
+| Docker 启动失败 | 运行 `docker-compose logs` 查看错误 |
+| Java 版本不兼容 | 确认 Java 17+（`java -version`） |
+
+查看日志：
+```bash
+docker-compose logs -f backend
+tail -f logs/hospital.log
+```
+
+---
+
+## 📈 项目改进
+
+✨ **11 项核心改进**
+- 全局异常处理、结构化日志、数据库优化、监控告警等
+
+📚 **完整 Docker 支持**
+- 一键启动、生产配置、云部署
+
+详见：
+- `IMPROVEMENT_SUMMARY.md` - 改进总结
+- `DOCKER_COMPLETE_GUIDE.md` - Docker 指南
+
+---
+
+## 💡 项目结构
+
+```
+hospital/
+├── src/main/java/org/example/hospital/
+│   ├── config/          配置
+│   ├── controller/      REST API
+│   ├── domain/          数据模型
+│   ├── dto/             数据传输对象
+│   ├── repository/      数据访问
+│   ├── security/        安全配置
+│   └── service/         业务逻辑
+├── frontend/            Vue 应用
+├── Dockerfile           后端镜像
+├── docker-compose.yml   容器编排
+├── .env                 环境配置
+└── README.md            本文件
+```
+
+---
+
+## 📄 许可证
+
+MIT License
+
+---
+
+<div align="center">
+
+**⭐ 如果这个项目对你有帮助，请给个 Star！**
+
+Made with ❤️ for Hospital Management
+
+</div>

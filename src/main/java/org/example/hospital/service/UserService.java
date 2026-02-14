@@ -10,10 +10,13 @@ import org.example.hospital.repository.UserAccountRepository;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @Service
 public class UserService {
 
+    private static final Logger logger = LoggerFactory.getLogger(UserService.class);
     private final UserAccountRepository userAccountRepository;
     private final PasswordEncoder passwordEncoder;
 
@@ -24,6 +27,7 @@ public class UserService {
 
     @Transactional(readOnly = true)
     public List<UserSummary> findAll() {
+        logger.debug("查询所有用户");
         return userAccountRepository.findAll().stream()
                 .map(this::toSummary)
                 .collect(Collectors.toList());
@@ -31,8 +35,12 @@ public class UserService {
 
     @Transactional(readOnly = true)
     public UserSummary findById(Long id) {
+        logger.debug("查询用户: {}", id);
         UserAccount user = userAccountRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+                .orElseThrow(() -> {
+                    logger.warn("用户不存在: {}", id);
+                    return new IllegalArgumentException("User not found");
+                });
         return toSummary(user);
     }
 
@@ -45,9 +53,14 @@ public class UserService {
 
     @Transactional
     public void changePassword(Long userId, String rawPassword) {
+        logger.info("修改用户密码: {}", userId);
         UserAccount user = userAccountRepository.findById(userId)
-                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+                .orElseThrow(() -> {
+                    logger.warn("用户不存在: {}", userId);
+                    return new IllegalArgumentException("User not found");
+                });
         user.setPassword(passwordEncoder.encode(rawPassword));
+        logger.info("密码修改成功: {}", userId);
     }
 
     public static class UserSummary {

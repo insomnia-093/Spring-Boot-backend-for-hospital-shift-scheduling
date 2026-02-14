@@ -5,10 +5,15 @@ if (typeof globalThis.global === 'undefined') {
 }
 import { Client } from '@stomp/stompjs';
 import SockJS from 'sockjs-client';
+import { setupErrorHandling } from './utils/errorHandler.js';
 import './style.css';
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:9090/api';
 const WS_BASE = import.meta.env.VITE_WS_BASE || 'http://localhost:9090/ws';
+
+// 立即初始化全局错误处理
+setupErrorHandling();
+globalThis.API_BASE = API_BASE;
 
 createApp({
   setup() {
@@ -189,6 +194,23 @@ createApp({
         { label: '已指派', value: assigned },
         { label: '待指派', value: unassigned }
       ];
+    });
+
+    // 新增：按科室统计值班人数（夜班）
+    const nightShiftByDepartment = computed(() => {
+      const map = new Map();
+      nightShiftItems.value.forEach(shift => {
+        if (!shift.assigneeUserId) return; // 只统计已指派的
+        const deptName = shift.departmentName || `科室 ${shift.departmentId || '-'}`;
+        const count = map.get(deptName) || 0;
+        map.set(deptName, count + 1);
+      });
+      return Array.from(map.entries()).map(([label, value]) => ({ label, value }));
+    });
+
+    const departmentShiftPie = computed(() => {
+      const items = buildPieData(nightShiftByDepartment.value);
+      return { items, style: buildPieStyle(items) };
     });
 
     const piePalette = ['#6366f1', '#38bdf8', '#f59e0b', '#22c55e', '#a855f7', '#f97316'];
@@ -624,20 +646,48 @@ createApp({
         ...(auth.token ? { 'Authorization': `Bearer ${auth.token}` } : {})
       };
 
-      const res = await fetch(`${API_BASE}${endpoint}`, {
-        ...options,
-        headers: { ...headers, ...options.headers }
-      });
+      try {
+        const res = await fetch(`${API_BASE}${endpoint}`, {
+          ...options,
+          headers: { ...headers, ...options.headers }
+        });
 
-      if (res.status === 401) {
-        logout();
-        throw new Error('Unauthorized');
+        if (res.status === 401) {
+          console.warn('认证失败，执行登出');
+          logout();
+          throw new Error('认证失败，请重新登录');
+        }
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          const errorMsg = err.message || err.error || `HTTP ${res.status}`;
+          console.error(`API 调用失败 [${endpoint}]:`, errorMsg);
+          throw new Error(errorMsg);
+        }
+
+        return await res.json();
+      } catch (error) {
+        console.error(`API 调用异常 [${endpoint}]:`, error);
+        // 上传到错误日志
+        try {
+          await fetch(`${API_BASE}/logs/error`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(auth.token ? { 'Authorization': `Bearer ${auth.token}` } : {})
+            },
+            body: JSON.stringify({
+              type: 'api-error',
+              endpoint,
+              message: error.message,
+              timestamp: new Date().toISOString()
+            })
+          }).catch(() => {});
+        } catch (e) {
+          // 日志上传失败，忽略
+        }
+        throw error;
       }
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.message || 'Request failed');
-      }
-      return res.json();
     };
 
     const formatTime = (isoString) => {
@@ -774,6 +824,7 @@ createApp({
       nightPieDept,
       nightPieRole,
       nightPieStatus,
+      departmentShiftPie,
       isAdmin,
       loadShiftIntoForm,
       resetUserPassword,
@@ -1492,6 +1543,26 @@ createApp({
                   <textarea rows="3" v-model="adminShiftForm.notes" placeholder="班次备注"></textarea>
                 </div>
                 <button style="width: auto;" @click="updateShiftDetails" :disabled="loading">保存班次</button>
+              </div>
+
+              <div class="card profile-panel">
+                <h3>科室值班统计（夜班）</h3>
+                <div class="text-muted text-sm" style="margin-bottom: 1rem;">按科室统计已指派的夜班人数</div>
+                <div style="display: flex; gap: 2rem; align-items: center;">
+                  <div style="flex: 1; text-align: center;">
+                    <div class="pie-chart" :style="departmentShiftPie.style" style="width: 150px; height: 150px; border-radius: 50%; margin: 0 auto;"></div>
+                  </div>
+                  <div style="flex: 1;">
+                    <div class="pie-legend">
+                      <div v-for="item in departmentShiftPie.items" :key="item.label" class="legend-item">
+                        <span class="legend-color" :style="{ backgroundColor: item.color }"></span>
+                        <span class="legend-label">{{ item.label }}</span>
+                        <span class="legend-value">{{ item.value }} 人</span>
+                      </div>
+                      <div v-if="departmentShiftPie.items.length === 0" class="text-muted text-sm">暂无数据</div>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
