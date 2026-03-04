@@ -30,6 +30,7 @@
       <ShiftsView
         :shifts="shifts"
         :loading="loadingData"
+        :departments="departments"
         :assignee-distribution="summary.assigneeDistribution"
         :department-distribution="summary.departmentDistribution"
         @refresh="loadShifts"
@@ -66,7 +67,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, watch } from 'vue';
+import { ref, reactive, computed, onMounted } from 'vue';
 import { useApi } from './composables/useApi';
 import { useWebSocket } from './composables/useWebSocket';
 
@@ -112,6 +113,12 @@ const summary = reactive({
 
 const calendarMonth = ref(new Date());
 const calendarFilterDeptId = ref('');
+const calendarData = reactive({
+  year: 0,
+  month: 0,
+  calendarShifts: {}
+});
+const myShiftItems = ref([]);
 const chatMessages = ref([]);
 const adminUsers = ref([]);
 
@@ -119,13 +126,7 @@ const adminUsers = ref([]);
 const isAdmin = computed(() => Array.isArray(user.roles) && user.roles.includes('ADMIN'));
 const pendingTaskCount = computed(() => agentTasks.value.filter(task => ['PENDING', 'IN_PROGRESS'].includes(task.status)).length);
 
-const myShifts = computed(() => {
-  if (!user.id) return [];
-  return shifts.value
-    .filter(shift => String(shift.assigneeUserId || '') === String(user.id))
-    .sort((a, b) => new Date(a.startTime) - new Date(b.startTime))
-    .slice(0, 6);
-});
+const myShifts = computed(() => myShiftItems.value || []);
 
 const calendarTitle = computed(() => {
   const date = calendarMonth.value;
@@ -142,25 +143,27 @@ const calendarDays = computed(() => {
   const year = date.getFullYear();
   const month = date.getMonth();
   const firstDay = new Date(year, month, 1);
-  const startOffset = firstDay.getDay(); // 0 is Sunday
+  const startOffset = firstDay.getDay();
 
-  // Calculate start date of the grid (last Sunday or this Sunday)
   const startDate = new Date(year, month, 1 - startOffset);
 
   const map = new Map();
-  // Safe check for shifts
-  (shifts.value || []).forEach(shift => {
-    if (!shift.startTime) return;
-    if (calendarFilterDeptId.value && String(shift.departmentId) !== String(calendarFilterDeptId.value)) return;
+  const calendarShifts = calendarData.calendarShifts || {};
+  Object.entries(calendarShifts).forEach(([key, items]) => {
+    const filtered = (items || []).filter(item => {
+      if (!calendarFilterDeptId.value) return true;
+      return String(item.departmentId || '') === String(calendarFilterDeptId.value);
+    });
+    if (!filtered.length) return;
 
-    try {
-      const d = new Date(shift.startTime);
-      const key = formatDateKey(d);
-      const label = `${shift.departmentName || '科室'} ${shift.requiredRole || ''}`.trim();
-      if (!map.has(key)) map.set(key, []);
-      map.get(key).push({ type: 'shift', label, status: shift.status });
-    } catch (e) {
-      console.error('Invalid date in shift', shift);
+    const mapped = filtered.map(item => {
+      const dept = item.departmentName || '科室';
+      const summary = item.summary || '值班';
+      const headcount = item.headcount != null ? `(${item.headcount}人)` : '';
+      return { type: 'calendar', label: `${dept} ${summary}${headcount}`.trim() };
+    });
+    if (mapped.length) {
+      map.set(key, mapped);
     }
   });
 
@@ -292,20 +295,51 @@ const updateSummary = (shiftList) => {
      .map(([label, value]) => ({ label, value }));
 };
 
+const applyShiftManagement = (shiftManagement) => {
+  if (!shiftManagement) return;
+  shifts.value = shiftManagement.shifts || [];
+
+  const stats = shiftManagement.stats || {};
+  summary.totalShifts = stats.totalShifts || 0;
+  summary.assignedShifts = stats.assignedShifts || 0;
+  summary.unassignedShifts = stats.pendingShifts || 0;
+  summary.nightShifts = stats.nightShifts || 0;
+
+  const charts = shiftManagement.charts || {};
+  summary.assigneeDistribution = charts.staffDistribution || [];
+  summary.departmentDistribution = charts.departmentDistribution || [];
+};
+
+const applyOverviewPanel = (overviewPanel) => {
+  if (!overviewPanel) return;
+  myShiftItems.value = overviewPanel.myShifts || [];
+  const calendar = overviewPanel.calendar || {};
+  calendarData.year = calendar.year || calendarData.year;
+  calendarData.month = calendar.month || calendarData.month;
+  calendarData.calendarShifts = calendar.calendarShifts || {};
+};
+
 const loadDashboard = async () => {
   loadingData.value = true;
   try {
-    const [deptRes, shiftRes, taskRes] = await Promise.all([
+    const monthParam = formatMonthParam(calendarMonth.value);
+    const dateParam = formatDateParam(new Date());
+    const [deptRes, taskRes, visualizationRes] = await Promise.all([
       api('/departments').catch(() => []),
-      api('/shifts').catch(() => []),
-      api('/agent/tasks/pending').catch(() => [])
+      api('/agent/tasks/pending').catch(() => []),
+      api(`/visualization?date=${dateParam}&month=${monthParam}`).catch(() => null)
     ]);
     departments.value = deptRes;
-    shifts.value = shiftRes;
     agentTasks.value = taskRes;
 
-    updateSummary(shiftRes);
-
+    if (visualizationRes) {
+      applyShiftManagement(visualizationRes.shiftManagement);
+      applyOverviewPanel(visualizationRes.overviewPanel);
+    } else {
+      shifts.value = [];
+      myShiftItems.value = [];
+      calendarData.calendarShifts = {};
+    }
   } catch (e) {
     console.error("Dashboard load failed", e);
   } finally {
@@ -316,9 +350,14 @@ const loadDashboard = async () => {
 const loadShifts = async () => {
   loadingData.value = true;
   try {
-    const shiftRes = await api('/shifts').catch(() => []);
-    shifts.value = shiftRes;
-    updateSummary(shiftRes);
+    const monthParam = formatMonthParam(calendarMonth.value);
+    const dateParam = formatDateParam(new Date());
+    const shiftRes = await api(`/visualization/shift-management?date=${dateParam}&month=${monthParam}`).catch(() => null);
+    if (shiftRes) {
+      applyShiftManagement(shiftRes);
+    } else {
+      shifts.value = [];
+    }
   } finally {
     loadingData.value = false;
   }
@@ -406,8 +445,8 @@ const sendChat = async (content) => {
        // However, the user complains about DUPLICATES.
        // This implies that EITHER:
        // A. The backend IS broadcasting it somehow (maybe via another mechanism not seen here).
-       // B. OR, the client code below is running twice?
-       // C. OR, my deduplication logic is failing because the message content differs slightly or timestamp differs > 1s?
+       // B. Or, the client code below is running twice?
+       // C. Or, my deduplication logic is failing because the message content differs slightly or timestamp differs > 1s?
 
        // In the previous step, I added deduplication logic.
        // Since the user says "still sending twice", it means either:

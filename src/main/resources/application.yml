@@ -3,12 +3,15 @@ spring:
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:my_pg_db}
     username: ${DB_USER:postgres}
     password: ${DB_PASSWORD:123456}
+    hikari:
+      jdbc-url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:my_pg_db}
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: create-drop
     properties:
       hibernate:
         format_sql: true
+
     open-in-view: false
   jackson:
     serialization:
@@ -33,6 +36,17 @@ app:
       email: ${INIT_ADMIN_EMAIL:admin@hospital.local}
       password: ${INIT_ADMIN_PASSWORD:Admin123!}
       full-name: ${INIT_ADMIN_FULL_NAME:System Admin}
+  analytics:
+    enabled: ${ANALYTICS_ENABLED:false}
+    datasource:
+      url: jdbc:postgresql://${ANALYTICS_DB_HOST:localhost}:${ANALYTICS_DB_PORT:5432}/${ANALYTICS_DB_NAME:hospital_analytics}
+      username: ${ANALYTICS_DB_USER:postgres}
+      password: ${ANALYTICS_DB_PASSWORD:123456}
+      hikari:
+        jdbc-url: jdbc:postgresql://${ANALYTICS_DB_HOST:localhost}:${ANALYTICS_DB_PORT:5432}/${ANALYTICS_DB_NAME:hospital_analytics}
+    refresh:
+      daily-cron: ${ANALYTICS_DAILY_CRON:0 10 0 * * *}
+      monthly-cron: ${ANALYTICS_MONTHLY_CRON:0 20 0 1 * *}
 
 logging:
   level:

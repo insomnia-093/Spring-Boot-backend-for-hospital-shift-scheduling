@@ -1,4 +1,5 @@
 import { createApp } from 'vue';
+import './polyfills';
 import './style.css';
 import App from './App.vue';
 import { setupErrorHandling } from './utils/errorHandler.js';

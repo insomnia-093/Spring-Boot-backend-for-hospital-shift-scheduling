@@ -241,10 +241,12 @@ public class ShiftService {
     private ShiftResponse toResponse(Shift shift) {
         Long assigneeId = shift.getAssignedUser() != null ? shift.getAssignedUser().getId() : null;
         String assigneeName = shift.getAssignedUser() != null ? shift.getAssignedUser().getFullName() : null;
+        String shiftType = isNightShift(shift.getStartTime(), shift.getEndTime()) ? "NIGHT" : "DAY";
         return new ShiftResponse(
                 shift.getId(),
                 shift.getStartTime(),
                 shift.getEndTime(),
+                shiftType,
                 shift.getRequiredRole(),
                 shift.getStatus(),
                 shift.getDepartment().getId(),

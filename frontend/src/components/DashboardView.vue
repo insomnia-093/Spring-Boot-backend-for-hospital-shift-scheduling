@@ -34,7 +34,12 @@
             <div v-if="myShifts.length > 0" class="shift-list">
               <div v-for="shift in myShifts.slice(0, 5)" :key="shift.id" class="shift-item">
                 <div class="shift-dept">{{ shift.departmentName || '科室' }}</div>
-                <div class="shift-role">{{ shift.requiredRole }}</div>
+                <div class="shift-meta">
+                  <div class="shift-role">{{ shift.requiredRole || '未指定角色' }}</div>
+                  <span :class="['status-badge', `status-${shift.status || 'OPEN'}`]">
+                    {{ statusLabel(shift.status) }}
+                  </span>
+                </div>
                 <div class="shift-time">{{ formatTime(shift.startTime) }}</div>
               </div>
             </div>
@@ -111,6 +116,17 @@ const formatTime = (isoString) => {
   if (!isoString) return '-';
   const d = new Date(isoString);
   return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+};
+
+const statusLabel = (status) => {
+  const map = {
+    OPEN: '待指派',
+    ASSIGNED: '已指派',
+    IN_PROGRESS: '进行中',
+    COMPLETED: '已完成',
+    CANCELLED: '已取消'
+  };
+  return map[status] || (status ? status.replace(/_/g, ' ') : '未知');
 };
 
 const isToday = (cell) => {
@@ -318,6 +334,17 @@ const isToday = (cell) => {
   color: #6366f1;
   font-size: 11px;
   font-weight: 500;
+}
+
+.shift-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.shift-meta .status-badge {
+  text-transform: none;
 }
 
 /* 空状态 */

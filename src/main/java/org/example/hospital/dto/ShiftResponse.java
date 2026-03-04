@@ -9,6 +9,7 @@ public class ShiftResponse {
     private Long id;
     private LocalDateTime startTime;
     private LocalDateTime endTime;
+    private String shiftType;
     private RoleType requiredRole;
     private ShiftStatus status;
     private Long departmentId;
@@ -20,6 +21,7 @@ public class ShiftResponse {
     public ShiftResponse(Long id,
                          LocalDateTime startTime,
                          LocalDateTime endTime,
+                         String shiftType,
                          RoleType requiredRole,
                          ShiftStatus status,
                          Long departmentId,
@@ -30,6 +32,7 @@ public class ShiftResponse {
         this.id = id;
         this.startTime = startTime;
         this.endTime = endTime;
+        this.shiftType = shiftType;
         this.requiredRole = requiredRole;
         this.status = status;
         this.departmentId = departmentId;
@@ -49,6 +52,10 @@ public class ShiftResponse {
 
     public LocalDateTime getEndTime() {
         return endTime;
+    }
+
+    public String getShiftType() {
+        return shiftType;
     }
 
     public RoleType getRequiredRole() {
