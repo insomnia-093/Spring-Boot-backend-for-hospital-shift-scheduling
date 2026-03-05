@@ -31,7 +31,17 @@ export function useApi() {
         throw new Error(errorMsg);
       }
 
-      return await res.json();
+      const payload = await res.json().catch(() => null);
+
+      // 兼容两类后端返回：
+      // 1) 直接返回业务对象
+      // 2) 返回统一包裹 { code, message, data }
+      if (payload && typeof payload === 'object' && Object.prototype.hasOwnProperty.call(payload, 'data')) {
+        return payload.data;
+      }
+
+      return payload;
+
     } catch (error) {
       console.error(`API 调用异常 [${endpoint}]:`, error);
       throw error;

@@ -33,7 +33,9 @@
         :departments="departments"
         :assignee-distribution="summary.assigneeDistribution"
         :department-distribution="summary.departmentDistribution"
+        :is-admin="isAdmin"
         @refresh="loadShifts"
+        @edit-shift="updateShiftDetails"
       />
     </template>
 
@@ -133,9 +135,25 @@ const calendarTitle = computed(() => {
   return `${date.getFullYear()}年${date.getMonth() + 1}月`;
 });
 
-const formatDateKey = (date) => {
-  const pad = (val) => String(val).padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+const pad2 = (val) => String(val).padStart(2, '0');
+
+const formatDateKey = (date) => `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+
+const formatMonthParam = (input) => {
+  const date = input instanceof Date ? input : new Date(input);
+  if (Number.isNaN(date.getTime())) {
+    const now = new Date();
+    return `${now.getFullYear()}-${pad2(now.getMonth() + 1)}`;
+  }
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}`;
+};
+
+const formatDateParam = (input) => {
+  const date = input instanceof Date ? input : new Date(input);
+  if (Number.isNaN(date.getTime())) {
+    return formatDateKey(new Date());
+  }
+  return formatDateKey(date);
 };
 
 const calendarDays = computed(() => {
@@ -297,17 +315,40 @@ const updateSummary = (shiftList) => {
 
 const applyShiftManagement = (shiftManagement) => {
   if (!shiftManagement) return;
-  shifts.value = shiftManagement.shifts || [];
 
-  const stats = shiftManagement.stats || {};
-  summary.totalShifts = stats.totalShifts || 0;
-  summary.assignedShifts = stats.assignedShifts || 0;
-  summary.unassignedShifts = stats.pendingShifts || 0;
-  summary.nightShifts = stats.nightShifts || 0;
+  const shiftList = Array.isArray(shiftManagement.shifts)
+    ? shiftManagement.shifts
+    : Array.isArray(shiftManagement?.data?.shifts)
+      ? shiftManagement.data.shifts
+      : [];
 
-  const charts = shiftManagement.charts || {};
-  summary.assigneeDistribution = charts.staffDistribution || [];
-  summary.departmentDistribution = charts.departmentDistribution || [];
+  shifts.value = shiftList;
+
+  const computedTotal = shiftList.length;
+  const computedAssigned = shiftList.filter((s) => s?.assigneeUserId != null).length;
+  const computedPending = Math.max(computedTotal - computedAssigned, 0);
+  const computedNight = shiftList.filter((s) => {
+    const t = String(s?.startTime || '');
+    return t.includes('T16:') || t.includes('T17:') || t.includes('T18:') || t.includes('T19:') ||
+      t.includes('T20:') || t.includes('T21:') || t.includes('T22:') || t.includes('T23:');
+  }).length;
+
+  const stats = shiftManagement.stats || shiftManagement?.data?.stats || {};
+  const statsTotal = Number(stats.totalShifts ?? NaN);
+  const statsAssigned = Number(stats.assignedShifts ?? NaN);
+  const statsPending = Number(stats.pendingShifts ?? stats.unassignedShifts ?? NaN);
+  const statsNight = Number(stats.nightShifts ?? NaN);
+
+  const preferComputed = computedTotal > 0 && (!Number.isFinite(statsTotal) || statsTotal === 0);
+
+  summary.totalShifts = preferComputed ? computedTotal : (Number.isFinite(statsTotal) ? statsTotal : computedTotal);
+  summary.assignedShifts = preferComputed ? computedAssigned : (Number.isFinite(statsAssigned) ? statsAssigned : computedAssigned);
+  summary.unassignedShifts = preferComputed ? computedPending : (Number.isFinite(statsPending) ? statsPending : computedPending);
+  summary.nightShifts = preferComputed ? computedNight : (Number.isFinite(statsNight) ? statsNight : computedNight);
+
+  const charts = shiftManagement.charts || shiftManagement?.data?.charts || {};
+  summary.assigneeDistribution = Array.isArray(charts.staffDistribution) ? charts.staffDistribution : [];
+  summary.departmentDistribution = Array.isArray(charts.departmentDistribution) ? charts.departmentDistribution : [];
 };
 
 const applyOverviewPanel = (overviewPanel) => {
@@ -319,44 +360,75 @@ const applyOverviewPanel = (overviewPanel) => {
   calendarData.calendarShifts = calendar.calendarShifts || {};
 };
 
-const loadDashboard = async () => {
+const DEMO_MONTH_FALLBACK = '2026-03';
+
+const loadShifts = async () => {
   loadingData.value = true;
   try {
-    const monthParam = formatMonthParam(calendarMonth.value);
-    const dateParam = formatDateParam(new Date());
-    const [deptRes, taskRes, visualizationRes] = await Promise.all([
-      api('/departments').catch(() => []),
-      api('/agent/tasks/pending').catch(() => []),
-      api(`/visualization?date=${dateParam}&month=${monthParam}`).catch(() => null)
-    ]);
-    departments.value = deptRes;
-    agentTasks.value = taskRes;
+    let visualization = null;
+    const monthParam = formatMonthParam(calendarMonth.value || new Date());
 
-    if (visualizationRes) {
-      applyShiftManagement(visualizationRes.shiftManagement);
-      applyOverviewPanel(visualizationRes.overviewPanel);
-    } else {
-      shifts.value = [];
-      myShiftItems.value = [];
-      calendarData.calendarShifts = {};
+    try {
+      visualization = await api(`/analytics/visualization?month=${monthParam}`);
+    } catch (_) {
+      visualization = null;
     }
-  } catch (e) {
-    console.error("Dashboard load failed", e);
+
+    if (visualization) {
+      applyShiftManagement(visualization.shiftManagement || visualization);
+    }
+
+    if (!Array.isArray(shifts.value) || shifts.value.length === 0) {
+      const fallbackShifts = await api('/shifts');
+      shifts.value = Array.isArray(fallbackShifts) ? fallbackShifts : [];
+      updateSummary(shifts.value);
+    } else {
+      updateSummary(shifts.value);
+    }
   } finally {
     loadingData.value = false;
   }
 };
 
-const loadShifts = async () => {
+const loadDashboard = async () => {
   loadingData.value = true;
   try {
-    const monthParam = formatMonthParam(calendarMonth.value);
-    const dateParam = formatDateParam(new Date());
-    const shiftRes = await api(`/visualization/shift-management?date=${dateParam}&month=${monthParam}`).catch(() => null);
-    if (shiftRes) {
-      applyShiftManagement(shiftRes);
+    const monthParam = formatMonthParam(calendarMonth.value || new Date()) || DEMO_MONTH_FALLBACK;
+
+    const [deptRes, taskRes] = await Promise.all([
+      api('/departments').catch(() => []),
+      api('/agent/tasks/pending').catch(() => [])
+    ]);
+
+    departments.value = Array.isArray(deptRes) ? deptRes : [];
+    agentTasks.value = Array.isArray(taskRes) ? taskRes : [];
+
+    try {
+      const visualization = await api(`/analytics/visualization?month=${monthParam}`);
+      if (visualization?.shiftManagement || visualization?.overviewPanel) {
+        applyShiftManagement(visualization.shiftManagement || visualization);
+        applyOverviewPanel(visualization.overviewPanel || {});
+      }
+    } catch (_) {
+      // visualization is optional, fallback below
+    }
+
+    if (!Array.isArray(shifts.value) || shifts.value.length === 0) {
+      const shiftRes = await api('/shifts').catch(() => []);
+      shifts.value = Array.isArray(shiftRes) ? shiftRes : [];
+      updateSummary(shifts.value);
     } else {
-      shifts.value = [];
+      updateSummary(shifts.value);
+    }
+
+    if (!calendarData.calendarShifts || Object.keys(calendarData.calendarShifts).length === 0) {
+      const dateParam = formatDateParam(calendarMonth.value || new Date());
+      const calRes = await api(`/analytics/overview?date=${dateParam}`).catch(() => null);
+      if (calRes?.overviewPanel) {
+        applyOverviewPanel(calRes.overviewPanel);
+      } else if (calRes) {
+        applyOverviewPanel(calRes);
+      }
     }
   } finally {
     loadingData.value = false;
@@ -364,202 +436,128 @@ const loadShifts = async () => {
 };
 
 const loadChatHistory = async () => {
-  try {
-    chatMessages.value = await api('/agent/chat?limit=50').catch(() => []);
-  } catch (e) {
-    chatMessages.value = [];
-  }
-};
-
-const loadAdminUsers = async () => {
-  try {
-    adminUsers.value = await api('/admin/users').catch(() => []);
-  } catch (e) {
-    adminUsers.value = [];
-  }
-};
-
-const connectWs = () => {
-  if (auth.token) {
-    // Pass callback to handle incoming messages
-    wsConnect((msg) => {
-        // Prevent duplicate messages
-        const isDuplicate = chatMessages.value.some(existing =>
-            existing.sender === msg.sender &&
-            existing.content === msg.content &&
-            Math.abs(new Date(existing.timestamp).getTime() - new Date(msg.timestamp).getTime()) < 1000
-        );
-
-        if (!isDuplicate) {
-            chatMessages.value.push(msg);
-        }
-    });
-  }
-};
-
-const disconnectWs = () => {
-  wsDisconnect();
-};
-
-const sendChat = async (content) => {
-  if (!wsConnected.value) {
-    // Try to connect if not connected
-    connectWs();
-    // Wait a bit? Or just fail?
-    // User expectation is it "just works"
-  }
-
-  const userPayload = {
-    sender: user.fullName || user.email || '用户',
-    role: 'CLIENT',
-    content
-  };
-
-  // Optimistically add to UI
-  // chatMessages.value.push(userPayload);
-  // Better to wait for WS echo or server confirmation if using STOMP broker that echoes back
-
-  wsSendMessage('/app/agent-chat', userPayload);
-
-  // Call Coze API via backend if needed (as per previous logic)
   loadingAgent.value = true;
   try {
-    const cozeResponse = await api('/agent/coze-chat', {
-      method: 'POST',
-      body: JSON.stringify({ content, userId: user.id })
-    });
-    // If backend drives the chat via websocket push, we might not need to do anything here
-    // But if backend just returns response, we push it to WS ourselves?
-    // The previous logic pushed "Coze Agent" message via WS from client side?
-    // That seems weird (client impersonating agent). The backend should send the agent response.
-    // However, sticking to previous logic for compatibility if backend doesn't broadcast agent reply automatically.
-
-    if (cozeResponse?.response) {
-       // Since the backend 'CozeAgentService' saves the message but doesn't seem to broadcast it via WebSocket automatically,
-       // and we have observed duplicates, let's analyze carefully.
-       //
-       // If I comment this out, the user will NOT see the agent response in real-time unless:
-       // 1. The backend automatically broadcasts it (which AgentChatService.save doesn't seem to do).
-       // 2. OR, the user refreshes the chat history manually (polling).
-       //
-       // However, the user complains about DUPLICATES.
-       // This implies that EITHER:
-       // A. The backend IS broadcasting it somehow (maybe via another mechanism not seen here).
-       // B. Or, the client code below is running twice?
-       // C. Or, my deduplication logic is failing because the message content differs slightly or timestamp differs > 1s?
-
-       // In the previous step, I added deduplication logic.
-       // Since the user says "still sending twice", it means either:
-       // 1. One message comes from WS broadcast (from this block below).
-       // 2. Another message comes from somewhere else?
-
-       // Wait, look at CozeAgentService.java:
-       // It saves the message to DB.
-       // It DOES NOT broadcast to /topic/agent-chat.
-
-       // So the ONLY way the client gets the message via WebSocket is if THIS client code runs:
-       // wsSendMessage('/app/agent-chat', { ... });
-
-       // If the user sees two messages, maybe this block is executed twice? Unlikely.
-       // OR, maybe the backend CozeAgentController.chat() receives this message, saves it AGAIN?
-
-       // Ah!
-       // Start of loop:
-       // 1. Client calls POST /api/agent/coze-chat.
-       // 2. Backend saves "Coze Agent" message to DB (ID: 100). Returns response to HTTP.
-       // 3. Client receives HTTP response.
-       // 4. Client calls wsSendMessage('/app/agent-chat', { sender: 'Coze Agent', ... }).
-       // 5. Backend WebSocket Controller handles `/app/agent-chat`.
-       //    - `chat(ChatMessage message)` is called.
-       //    - It calls `agentChatService.save(message)`.
-       //    - Backend saves "Coze Agent" message to DB (ID: 101). **DUPLICATE IN DB!**
-       //    - Controller returns the saved message, which is broadcasted to `/topic/agent-chat`.
-       // 6. Client receives WebSocket message (ID: 101).
-
-       // So we have TWO messages in database?
-       // Yes!
-       // 1. One generated by CozeAgentService (internal logic).
-       // 2. One generated by the WebSocket echo from the client.
-
-       // AND the client might also be displaying the one from HTTP response if we had local logic?
-       // No, we rely on WS.
-
-       // Ideally, the backend CozeAgentService should broadcast the message via SimpMessagingTemplate when it generates it.
-       // But since we are editing the Frontend mostly (and backend logic seems to rely on this weird client loop-back),
-       // We should STOP sending the Agent response back to the server via WebSocket if the server is just going to save it again.
-       // Instead, we can simply display the response LOCALLY in the chat list without sending it back to the websocket (so it doesn't trigger a save).
-       // BUT, if we do that, OTHER clients connected won't see the agent response.
-
-       // Correct fix: The BACKEND should broadcast the response, and the client should NOT echo it back.
-       // But I am fixing the immediate duplication issue which implies the system is currently "double saving" or "double displaying".
-
-       // If I stop sending it via WebSocket from Javascript, and just push to `chatMessages`, it solves the display for THIS user.
-       // But it won't be saved twice in DB (good).
-       // But other users won't see it via WS. (Meh, usually chat with agent is private-ish, but the requirement said "multiple clients can interact").
-
-       // Wait, if I simply push to `chatMessages.value` here and DO NOT send via WebSocket:
-       chatMessages.value.push({
-          sender: 'Coze Agent',
-          role: 'AGENT',
-          content: cozeResponse.response,
-          timestamp: new Date().toISOString()
-       });
-
-       // AND I remove the `wsSendMessage` call for the agent response.
-       // This prevents the recursion/double-save.
-       // The message inside CozeAgentService is already saved to DB.
-       // So history is preserved.
-       // Real-time update for OTHER users is lost, but that might be acceptable or correct if Agent chat is per-user session.
-       // (Actually CozeAgentService saves it, so if they refresh they see it).
-    }
-  } catch(e) {
-     console.error(e);
-     chatMessages.value.push({
-         sender: 'System',
-         role: 'SYSTEM',
-         content: '发送失败: ' + e.message
-     });
+    const res = await api('/agent/chat?limit=50').catch(() => []);
+    const list = Array.isArray(res) ? res : (Array.isArray(res?.items) ? res.items : []);
+    chatMessages.value = list.map((m, idx) => ({
+      id: m.id ?? `msg-${idx}`,
+      role: m.role || (m.sender === 'USER' ? 'user' : 'assistant'),
+      content: m.content || m.message || ''
+    }));
   } finally {
     loadingAgent.value = false;
   }
 };
 
+const sendChat = async (payload) => {
+  const text = (payload?.message || payload || '').toString().trim();
+  if (!text) return;
 
-const updateShiftDetails = async (form) => {
-  loading.value = true;
+  chatMessages.value.push({
+    id: `local-user-${Date.now()}`,
+    role: 'user',
+    content: text
+  });
+
+  loadingAgent.value = true;
   try {
-    await api(`/admin/shifts/${form.shiftId}`, {
-      method: 'PUT',
-      body: JSON.stringify(form)
+    const res = await api('/agent/coze-chat', {
+      method: 'POST',
+      body: JSON.stringify({ message: text }),
+      headers: { 'Content-Type': 'application/json' }
     });
-    alert('班次已更新');
-    loadShifts();
-  } catch(e) {
-    alert(e.message);
+
+    const reply = res?.reply || res?.content || res?.message || '已发送，暂无回复内容';
+    chatMessages.value.push({
+      id: `local-bot-${Date.now()}`,
+      role: 'assistant',
+      content: reply
+    });
+  } catch (e) {
+    chatMessages.value.push({
+      id: `local-err-${Date.now()}`,
+      role: 'assistant',
+      content: `发送失败: ${e?.message || '未知错误'}`
+    });
   } finally {
-    loading.value = false;
+    loadingAgent.value = false;
   }
 };
 
-const resetUserPassword = async (form) => {
-  loading.value = true;
+const loadAdminUsers = async () => {
+  if (!isAdmin.value) return;
   try {
-    await api(`/admin/users/${form.userId}/password`, {
-      method: 'PUT',
-      body: JSON.stringify({ newPassword: form.newPassword })
-    });
-    alert('密码已更新');
-  } catch(e) {
-    alert(e.message);
-  } finally {
-    loading.value = false;
+    const res = await api('/admin/users').catch(() => []);
+    adminUsers.value = Array.isArray(res) ? res : (Array.isArray(res?.items) ? res.items : []);
+  } catch (_) {
+    adminUsers.value = [];
   }
-}
+};
 
-onMounted(() => {
-  if (auth.token) {
-    navigate('dashboard');
-    connectWs();
+const resetUserPassword = async (payload) => {
+  if (!isAdmin.value || !payload) return;
+  await api('/admin/users/reset-password', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+    headers: { 'Content-Type': 'application/json' }
+  });
+  await loadAdminUsers();
+};
+
+const normalizeShiftPayload = (payload) => ({
+  id: payload.id,
+  departmentId: payload.departmentId ?? null,
+  assigneeUserId: payload.assigneeUserId ?? null,
+  requiredRole: payload.requiredRole ?? null,
+  shiftType: payload.shiftType ?? null,
+  status: payload.status ?? null,
+  startTime: payload.startTime ?? null,
+  endTime: payload.endTime ?? null
+});
+
+const updateShiftDetails = async (payload) => {
+  if (!payload?.id) return;
+  const body = normalizeShiftPayload(payload);
+
+  // Prefer admin endpoint for explicit permissions; fallback to shared endpoint.
+  try {
+    await api(`/admin/shifts/${payload.id}`, {
+      method: 'PUT',
+      body: JSON.stringify(body),
+      headers: { 'Content-Type': 'application/json' }
+    });
+  } catch (_) {
+    await api(`/shifts/${payload.id}`, {
+      method: 'PUT',
+      body: JSON.stringify(body),
+      headers: { 'Content-Type': 'application/json' }
+    });
   }
+
+  await Promise.all([loadShifts(), loadDashboard()]);
+};
+
+const connectWs = () => {
+  try {
+    wsConnect();
+  } catch (_) {
+    // no-op
+  }
+};
+
+const disconnectWs = () => {
+  try {
+    wsDisconnect();
+  } catch (_) {
+    // no-op
+  }
+};
+
+onMounted(async () => {
+  if (!auth.token) return;
+  authToken.value = auth.token;
+  connectWs();
+  await loadDashboard();
 });
 </script>

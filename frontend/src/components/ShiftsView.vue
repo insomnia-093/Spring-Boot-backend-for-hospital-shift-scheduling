@@ -54,33 +54,39 @@
 
     <div class="shifts-layout">
       <div class="card table-card">
-        <table class="table">
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>时间范围</th>
-              <th>科室</th>
-              <th>必需角色</th>
-              <th>状态</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-if="loading"><td colspan="5" class="text-center">加载中...</td></tr>
-            <tr v-else-if="filteredShifts.length === 0"><td colspan="5" class="text-center">暂无排班</td></tr>
-            <tr v-for="shift in filteredShifts" :key="shift.id">
-              <td>{{ shift.id }}</td>
-              <td>
-                {{ formatTime(shift.startTime) }} <br />
-                <span class="text-muted text-sm">{{ formatTime(shift.endTime) }}</span>
-              </td>
-              <td>{{ shift.departmentName || shift.departmentId || '-' }}</td>
-              <td><span class="chip">{{ shift.requiredRole || '未指定' }}</span></td>
-              <td>
-                <span :class="['status-badge', `status-${shift.status || 'OPEN'}`]">{{ statusLabel(shift.status) }}</span>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+        <div class="table-wrap">
+          <table class="shift-table table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>时间范围</th>
+                <th>科室</th>
+                <th>必需角色</th>
+                <th>状态</th>
+                <th v-if="isAdmin">操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-if="loading"><td :colspan="isAdmin ? 6 : 5" class="text-center">加载中...</td></tr>
+              <tr v-else-if="filteredShifts.length === 0"><td :colspan="isAdmin ? 6 : 5" class="text-center">暂无排班</td></tr>
+              <tr v-for="shift in filteredShifts" :key="shift.id">
+                <td>{{ shift.id }}</td>
+                <td>
+                  {{ formatTime(shift.startTime) }} <br />
+                  <span class="text-muted text-sm">{{ formatTime(shift.endTime) }}</span>
+                </td>
+                <td>{{ shift.departmentName || shift.departmentId || '-' }}</td>
+                <td><span class="chip">{{ shift.requiredRole || '未指定' }}</span></td>
+                <td>
+                  <span :class="['status-badge', `status-${shift.status || 'OPEN'}`]">{{ statusLabel(shift.status) }}</span>
+                </td>
+                <td v-if="isAdmin">
+                  <button class="btn-edit" @click="openEditModal(shift)">编辑</button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
 
       <div class="card distribution-card">
@@ -126,21 +132,67 @@
         </div>
       </div>
     </div>
+
+    <div v-if="showEditModal" class="modal-mask" @click.self="closeEditModal">
+      <div class="modal-panel">
+        <div class="modal-header">
+          <h3>编辑班次 #{{ editForm.id }}</h3>
+          <button class="modal-close" @click="closeEditModal">×</button>
+        </div>
+        <div class="modal-body">
+          <label>科室ID</label>
+          <input v-model="editForm.departmentId" type="number" min="1" />
+
+          <label>指派用户ID</label>
+          <input v-model="editForm.assigneeUserId" type="number" min="1" placeholder="可留空" />
+
+          <label>必需角色</label>
+          <input v-model="editForm.requiredRole" type="text" />
+
+          <label>班次类型</label>
+          <select v-model="editForm.shiftType">
+            <option value="DAY">DAY</option>
+            <option value="NIGHT">NIGHT</option>
+          </select>
+
+          <label>状态</label>
+          <select v-model="editForm.status">
+            <option value="PENDING">PENDING</option>
+            <option value="ASSIGNED">ASSIGNED</option>
+            <option value="COMPLETED">COMPLETED</option>
+            <option value="CANCELLED">CANCELLED</option>
+          </select>
+
+          <label>开始时间</label>
+          <input v-model="editForm.startTime" type="datetime-local" />
+
+          <label>结束时间</label>
+          <input v-model="editForm.endTime" type="datetime-local" />
+
+          <p v-if="editError" class="form-error">{{ editError }}</p>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-ghost" @click="closeEditModal">取消</button>
+          <button class="btn-primary" @click="submitEdit">保存</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { computed, ref } from 'vue';
+import { computed, reactive, ref } from 'vue';
 
 const props = defineProps({
-  shifts: Array,
-  loading: Boolean,
-  departments: Array,
-  assigneeDistribution: Array,
-  departmentDistribution: Array
+  shifts: { type: Array, default: () => [] },
+  loading: { type: Boolean, default: false },
+  departments: { type: Array, default: () => [] },
+  assigneeDistribution: { type: Array, default: () => [] },
+  departmentDistribution: { type: Array, default: () => [] },
+  isAdmin: { type: Boolean, default: false }
 });
 
-defineEmits(['refresh']);
+const emit = defineEmits(['refresh', 'edit-shift']);
 
 const filterDeptId = ref('');
 const filterStatus = ref('');
@@ -153,7 +205,8 @@ const statusLabel = (status) => {
     ASSIGNED: '已指派',
     IN_PROGRESS: '进行中',
     COMPLETED: '已完成',
-    CANCELLED: '已取消'
+    CANCELLED: '已取消',
+    PENDING: '待指派'
   };
   return map[status] || (status ? status.replace(/_/g, ' ') : '未知');
 };
@@ -214,4 +267,93 @@ const barWidth = (value) => {
   const ratio = Math.min(1, (value || 0) / max);
   return `${Math.round(ratio * 100)}%`;
 };
+
+// Admin edit modal logic
+const showEditModal = ref(false);
+const editError = ref('');
+const editForm = reactive({
+  id: null,
+  departmentId: '',
+  assigneeUserId: '',
+  requiredRole: '',
+  shiftType: 'DAY',
+  status: 'PENDING',
+  startTime: '',
+  endTime: ''
+});
+
+const toLocalInput = (isoString) => {
+  if (!isoString) return '';
+  const d = new Date(isoString);
+  if (Number.isNaN(d.getTime())) return '';
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
+
+const toIsoOrNull = (val) => {
+  if (!val) return null;
+  const d = new Date(val);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toISOString();
+};
+
+const openEditModal = (shift) => {
+  editError.value = '';
+  editForm.id = shift.id;
+  editForm.departmentId = shift.departmentId ?? '';
+  editForm.assigneeUserId = shift.assigneeUserId ?? '';
+  editForm.requiredRole = shift.requiredRole ?? '';
+  editForm.shiftType = shift.shiftType || 'DAY';
+  editForm.status = shift.status || 'PENDING';
+  editForm.startTime = toLocalInput(shift.startTime);
+  editForm.endTime = toLocalInput(shift.endTime);
+  showEditModal.value = true;
+};
+
+const closeEditModal = () => {
+  showEditModal.value = false;
+  editError.value = '';
+};
+
+const submitEdit = () => {
+  editError.value = '';
+  if (!editForm.id || !editForm.departmentId) {
+    editError.value = '请补全班次ID和科室ID';
+    return;
+  }
+  const start = toIsoOrNull(editForm.startTime);
+  const end = toIsoOrNull(editForm.endTime);
+  if (!start || !end || new Date(start).getTime() >= new Date(end).getTime()) {
+    editError.value = '时间范围不合法';
+    return;
+  }
+
+  emit('edit-shift', {
+    id: Number(editForm.id),
+    departmentId: Number(editForm.departmentId),
+    assigneeUserId: editForm.assigneeUserId ? Number(editForm.assigneeUserId) : null,
+    requiredRole: editForm.requiredRole || null,
+    shiftType: editForm.shiftType || 'DAY',
+    status: editForm.status || 'PENDING',
+    startTime: start,
+    endTime: end
+  });
+  closeEditModal();
+};
 </script>
+
+<style scoped>
+/* ...existing code... */
+.btn-edit { border: 1px solid #9a8cff; color: #5b49d6; background: #fff; border-radius: 10px; padding: 6px 10px; cursor: pointer; }
+.modal-mask { position: fixed; inset: 0; background: rgba(27, 21, 63, 0.25); display: flex; align-items: center; justify-content: center; z-index: 60; }
+.modal-panel { width: min(640px, 92vw); background: #fff; border-radius: 16px; box-shadow: 0 20px 60px rgba(66, 44, 160, 0.25); overflow: hidden; }
+.modal-header { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; border-bottom: 1px solid #eee8ff; }
+.modal-close { border: none; background: transparent; font-size: 22px; cursor: pointer; color: #6b5bd2; }
+.modal-body { display: grid; gap: 8px; padding: 16px; }
+.modal-body input, .modal-body select { border: 1px solid #dcd4ff; border-radius: 10px; padding: 9px 10px; }
+.form-error { color: #d23b5f; font-size: 13px; margin-top: 4px; }
+.modal-footer { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 16px 16px; }
+.btn-ghost { background: #fff; border: 1px solid #cdc5ff; color: #5b49d6; border-radius: 10px; padding: 8px 14px; }
+.btn-primary { background: linear-gradient(135deg, #9b8bff, #7b6dff); border: none; color: #fff; border-radius: 10px; padding: 8px 14px; }
+/* ...existing code... */
+</style>
